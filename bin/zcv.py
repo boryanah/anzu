@@ -1,5 +1,10 @@
 import sys, os
 from mpi4py_fft import PFFT
+
+sys.path.insert(0, "/global/homes/b/boryanah/repos/velocileptors/")
+sys.path.insert(0, "/global/homes/b/boryanah/repos/anzu/")
+sys.path.insert(0, "/global/homes/b/boryanah/repos/anzu/boryanah/")
+
 from anzu.utils import combine_real_space_spectra, combine_measured_rsd_spectra
 from scipy.interpolate import interp1d
 from classy import Class
@@ -160,6 +165,7 @@ def get_cv_fields(
     resampler_type = "cic"
     resampler = _get_resampler(resampler_type)
 
+    # tuks
     linfields = glob(lindir + "{}_{}_*_np.npy".format(basename, nmesh))
     if len(linfields) == 0:
         make_lagfields(config, save_to_disk=True)
@@ -419,7 +425,7 @@ def reduce_variance(
         Lbox,
         nmesh,
         linear_surrogate=linear_surrogate,
-        linear_bias=bias_vec[0],
+        bias_vec=bias_vec[0],
     )
 
     for ii in range(n_tracers):
@@ -435,9 +441,9 @@ def reduce_variance(
             tracer_file = None
 
         tracerfield, pk_tt_dict = tracer_power(
-            tracer_pos, resampler, pm, Lbox, nmesh_out, rsd=False, interlaced=interlaced
+            tracer_pos, resampler, pm, Lbox, nmesh_out, rsd=rsd, interlaced=interlaced
         )
-
+        
         field_dict2 = {"t": tracerfield}
         field_D2 = [1]
 

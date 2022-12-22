@@ -7,6 +7,7 @@ import time
 import gc
 import sys
 import h5py
+import asdf
 import yaml
 import os
 from .common_functions import get_memory, kroneckerdelta
@@ -64,10 +65,37 @@ def get_linear_field(ic_format, ic_path, nmesh, fft, cv=False):
             ].astype(linfield.dtype)
 
         elif ic_format == "abacus":
-            pass
+            print(ic_path)
+            f = asdf.open(ic_path+f"ic_dens_N{nmesh:d}.asdf")
+            delta_lin[:] = f['data']['density'][
+                rank * nmesh // size : (rank + 1) * nmesh // size, :, :
+            ].astype(f['data']['density'].dtype)
+            f.close()
+
+            if cv:
+                f = asdf.open(ic_path+f"ic_disp_N{nmesh:d}.asdf")
+                Lbox = f['header']['BoxSize']
+                psi_x = f['data']['displacements'][:, :, :, 0]/Lbox
+                psi_y = f['data']['displacements'][:, :, :, 1]/Lbox
+                psi_z = f['data']['displacements'][:, :, :, 2]/Lbox
+                f.close()
+                
+                p_x = newDistArray(fft, False, val=1)
+                p_y = newDistArray(fft, False, val=2)
+                p_z = newDistArray(fft, False, val=3)
+
+                p_x[:] = psi_x[
+                    rank * nmesh // size : (rank + 1) * nmesh // size, :, :
+                ].astype(psi_x.dtype)
+                p_y[:] = psi_y[
+                    rank * nmesh // size : (rank + 1) * nmesh // size, :, :
+                ].astype(psi_y.dtype)
+                p_z[:] = psi_z[
+                    rank * nmesh // size : (rank + 1) * nmesh // size, :, :
+                ].astype(psi_z.dtype)
 
     except Exception as e:
-        if configs["ic_format"] == "monofonic":
+        if ic_format == "monofonic":
             print(
                 "Couldn't find {}. Make sure you've produced  \\\
                    with generic output format."
@@ -111,9 +139,10 @@ def filter_linear_fields(
     del p_x
 
     with h5py.File(filt_ics_file, "a", driver="mpio", comm=MPI.COMM_WORLD) as ics:
+        
         try:
             dset_dx = ics.create_dataset(
-                "DM_dx_filt", (nmesh, nmesh, nmesh), dtype=p_x.dtype
+                "DM_dx_filt", (nmesh, nmesh, nmesh), dtype=p_x_filt.dtype
             )
         except Exception as e:
             print(e)
@@ -127,7 +156,7 @@ def filter_linear_fields(
     with h5py.File(filt_ics_file, "a", driver="mpio", comm=MPI.COMM_WORLD) as ics:
         try:
             dset_dy = ics.create_dataset(
-                "DM_dy_filt", (nmesh, nmesh, nmesh), dtype=p_y.dtype
+                "DM_dy_filt", (nmesh, nmesh, nmesh), dtype=p_y_filt.dtype
             )
         except Exception as e:
             print(e)
@@ -141,7 +170,7 @@ def filter_linear_fields(
     with h5py.File(filt_ics_file, "a", driver="mpio", comm=MPI.COMM_WORLD) as ics:
         try:
             dset_dz = ics.create_dataset(
-                "DM_dz_filt", (nmesh, nmesh, nmesh), dtype=p_z.dtype
+                "DM_dz_filt", (nmesh, nmesh, nmesh), dtype=p_z_filt.dtype
             )
         except Exception as e:
             print(e)
@@ -369,9 +398,8 @@ def make_lagfields(configs, save_to_disk=False, z=None):
     if configs["ic_format"] == "monofonic":
         lindir = configs["icdir"]
     else:
-        lindir = configs["outdir"]
-
-    filt_ics_file = "/".join(lindir.split("/")[:-1]) + "/filtered_ics.h5"
+        #lindir = configs["outdir"] 
+        lindir = configs["icdir"]
 
     outdir = configs["outdir"]
     nmesh = configs["nmesh_in"]
@@ -393,6 +421,7 @@ def make_lagfields(configs, save_to_disk=False, z=None):
     else:
         basename = "mpi_icfields_nmesh"
         gaussian_kcut = None
+    filt_ics_file = "/".join(outdir.split("/")[:-1]) + f"/filtered_ics_nmesh{nmesh:d}.h5"
 
     # set up fft objects
     N = np.array([nmesh, nmesh, nmesh], dtype=int)

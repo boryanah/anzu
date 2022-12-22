@@ -5,6 +5,7 @@ from pmesh.window import FindResampler, ResampleWindow
 from glob import glob
 import psutil
 import h5py
+import asdf
 import numpy as np
 import gc
 
@@ -192,6 +193,12 @@ def get_snap_z(basedir, sim_type):
         header = readGadgetSnapshot(f, read_id=False, read_pos=False)
         z_this = header["redshift"]
 
+    elif sim_type == "AbacusSummit":
+        snapfiles = glob(basedir + "*.asdf")
+        f = snapfiles[0]
+        header = asdf.open(f)["header"]
+        z_this = header["Redshift"]
+
     return z_this
 
 
@@ -251,7 +258,7 @@ def load_particles(
     gaussian_cutoff=True
 ):
 
-    if not cv_surrogate:
+    if not cv_surrogate: # B.H. ignoring for now for AbacusSummit
         if sim_type == "Gadget_hdf5":
             snapfiles = glob(basedir + "*hdf5")
         elif sim_type == "Gadget":
@@ -349,7 +356,7 @@ def load_particles(
     else:
         n_ = [nmesh, nmesh, nmesh]
         get_cell_idx = lambda i, j, k: (i * n_[1] + j) * n_[2] + k
-        filt_ics_file = "/".join(icfile.split("/")[:-1]) + "/filtered_ics.h5"
+        filt_ics_file = "/".join(icfile.split("/")[:-1]) + f"/filtered_ics_nmesh{nmesh:d}.h5"
 
         with h5py.File(filt_ics_file, "r") as ics:
             if gaussian_cutoff:
